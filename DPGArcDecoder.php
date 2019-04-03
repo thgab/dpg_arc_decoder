@@ -34,7 +34,12 @@ class DPGArcDecoder
         foreach ($this->byteArray as $i => $byte) {
             if ( ! $this->header && $byte == 13 && $this->byteArray[$i + 1] == 10) {
                 $this->header = array_slice( $this->byteArray, 0, $i - 1 );
-
+                $this->byteArray = array_slice($this->byteArray,$i+1);
+            }
+        }
+        foreach ($this->byteArray as $i => $byte) {
+            if ( ! $this->header && $byte == 13 && $this->byteArray[$i + 1] == 10) {
+                $this->header = array_slice( $this->byteArray, 0, $i - 1 );
             }
 
             if ($this->key && ( $i > $this->keyIndex + 5 )) {
@@ -46,13 +51,13 @@ class DPGArcDecoder
                     }
                 }
                 if ($found) {
-                    $this->dataIndex = $i + 3;
+                    $this->dataIndex = $i + 4;
                     break;
                 }
             }
 
-            if ( ! $this->key && $byte == 26 && $this->byteArray[$i + 5] == 31) {
-                $this->key      = array_slice( $this->byteArray, $i, 4 );
+            if ( ! $this->key && $byte == 26 ) {
+                $this->key      = array_slice( $this->byteArray, $i+1, 4 );
                 $this->keyIndex = $i;
             }
         }
