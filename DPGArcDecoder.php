@@ -1,6 +1,5 @@
 <?php
 
-
 class DPGArcDecoder
 {
     private $byteArray;
@@ -11,37 +10,30 @@ class DPGArcDecoder
     private $dataIndex = 0;
 
     public static $version = '0.4';
+    private $compressedData;
+    private $uncompressedData;
 
-    public function __construct( $dataContent ) {
-        $this->createByteArrayFromString( $dataContent );
-    }
-
-    public function decode() {
-        $this->determineIndexes();
-        $data = $this->extractEncodedData();
-        $data = $this->xorDecodeData( $data );
-        return $this->uncompressData( $data );
+    public function __construct(array $byteArray) {
+        $this->byteArray = $byteArray;
     }
 
     /**
-     * @param $dataContent
+     * @return $this
      */
-    public function createByteArrayFromString( $dataContent ) {
-        $this->byteArray = unpack( "C*", $dataContent );
+    public function decode() {
+        $this->removeHeader()
+            ->determineIndexes()
+            ->extractEncodedData()
+            ->deCryptData()
+            ->uncompressData();
+        return $this;
     }
 
+    /**
+     * @return $this
+     */
     public function determineIndexes() {
         foreach ($this->byteArray as $i => $byte) {
-            if ( ! $this->header && $byte == 13 && $this->byteArray[$i + 1] == 10) {
-                $this->header = array_slice( $this->byteArray, 0, $i - 1 );
-                $this->byteArray = array_slice($this->byteArray,$i+1);
-            }
-        }
-        foreach ($this->byteArray as $i => $byte) {
-            if ( ! $this->header && $byte == 13 && $this->byteArray[$i + 1] == 10) {
-                $this->header = array_slice( $this->byteArray, 0, $i - 1 );
-            }
-
             if ($this->key && ( $i > $this->keyIndex + 5 )) {
                 $found = TRUE;
                 foreach ($this->key as $ii => $comp) {
@@ -56,38 +48,82 @@ class DPGArcDecoder
                 }
             }
 
-            if ( ! $this->key && $byte == 26 ) {
-                $this->key      = array_slice( $this->byteArray, $i+1, 4 );
+            if ( ! $this->key && $byte == 26) {
+                $this->key      = array_slice( $this->byteArray, $i + 1, 4 );
                 $this->keyIndex = $i;
             }
         }
+        if ($this->key && ! $this->dataIndex) {
+            foreach ($this->byteArray as $i => $byte) {
+                if ($i > $this->keyIndex + 5) {
+                    if ($byte == 13) {
+                        $this->dataIndex = $i + 5;
+                        break;
+                    }
+                }
+            }
+
+        }
+        return $this;
     }
 
     /**
-     * @return array
+     * @return $this
      */
     public function extractEncodedData() {
-        $data = array_slice( $this->byteArray, $this->dataIndex );
-        return $data;
+        $this->compressedData = array_slice( $this->byteArray, $this->dataIndex );
+        return $this;
     }
 
     /**
-     * @param array $data
+     * @return $this
+     */
+    public function uncompressData() {
+        $this->uncompressedData = @zlib_decode( ByteUtil::createStringFromByteArray($this->compressedData) );
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
+    public function removeHeader() {
+        foreach ($this->byteArray as $i => $byte) {
+            if ( ! $this->header && $byte == 13 && $this->byteArray[$i + 1] == 10) {
+                $this->header    = array_slice( $this->byteArray, 0, $i - 1 );
+                $this->byteArray = array_slice( $this->byteArray, $i + 1 );
+            }
+        }
+        return $this;
+    }
+
+    /**
+     * @return $this
+     */
+    public function deCryptData() {
+        $this->compressedData = ByteUtil::xorData( $this->compressedData, $this->key );
+        return $this;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getUncompressedData() {
+        return $this->uncompressedData;
+    }
+
+    /**
      * @return array
      */
-    public function xorDecodeData( array $data ) {
-        foreach ($data as $dataI => $databyte) {
-            $data[$dataI] = $this->key[$dataI % count( $this->key )] ^ $databyte;
+    public function getSegments() {
+        $decoded = $this->uncompressedData;
+        $segments = array();
+        while($decoded){
+            $vdata=array_values(unpack( "V", $decoded ));
+            $next = $vdata[0] + 12;
+            $segments[] = substr($decoded,0,$next);
+            $decoded = substr($decoded,$next);
         }
-        return $data;
-    }
-
-    /**
-     * @param array $data
-     * @return string
-     */
-    public function uncompressData( array $data ) {
-        return @zlib_decode( pack( 'C*', ...$data ) );
+        return $segments;
     }
 
 }

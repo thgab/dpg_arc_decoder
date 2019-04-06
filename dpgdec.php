@@ -4,7 +4,8 @@ if (php_sapi_name() != "cli") {
     exit;
 }
 
-include './DPGArcDecoder.php';
+include_once './DPGArcDecoder.php';
+include_once './ByteUtil.php';
 echo 'DPG .arc decoder v' . DPGArcDecoder::$version . ' by thgab' . PHP_EOL;
 
 if (count( $argv ) < 2) {
@@ -19,12 +20,20 @@ $inputFileHandle = @fopen( $inputFileName, "rb" ) or die( 'Could not open input 
 $inputFileSize = filesize( $inputFileName );
 $contents      = fread( $inputFileHandle, $inputFileSize );
 fclose( $inputFileHandle );
+$contents = ByteUtil::createByteArrayFromString($contents);
 
 $decoder = new DPGArcDecoder( $contents );
+$decoded = $decoder->decode()->getUncompressedData();
 
 $outputFileHandle = @fopen( $outputFileName, "wb" ) or die( 'Could not create output file' . PHP_EOL );
-fwrite( $outputFileHandle, $decoder->decode() );
-fclose( $outputFileHandle );
+fwrite($outputFileHandle,$decoded);
+fclose($outputFileHandle);
+
+foreach ($decoder->getSegments() as $i=>$segment) {
+    $outputFileHandle = @fopen( $outputFileName.'_'.$i, "wb" ) or die( 'Could not create output file' . PHP_EOL );
+    fwrite($outputFileHandle,$segment);
+    fclose($outputFileHandle);
+}
 
 
 
