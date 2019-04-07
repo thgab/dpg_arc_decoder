@@ -9,7 +9,6 @@ class DPGArcDecoder
 
     private $dataIndex = 12;
 
-    public static $version = '0.4';
     private $compressedData;
     private $uncompressedData;
 

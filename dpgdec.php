@@ -6,7 +6,7 @@ if (php_sapi_name() != "cli") {
 
 include_once './DPGArcDecoder.php';
 include_once './ByteUtil.php';
-echo 'DPG .arc decoder v' . DPGArcDecoder::$version . ' by thgab' . PHP_EOL;
+echo 'DPG .arc decoder by thgab' . PHP_EOL;
 
 if (count( $argv ) < 2) {
     echo 'usage: php ' . basename( __FILE__ ) . ' inputfile [outputfile]' . PHP_EOL;
