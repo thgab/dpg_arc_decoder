@@ -5,9 +5,9 @@ class DPGArcDecoder
     private $byteArray;
     private $header = array();
     private $key = array();
+    private $folders = array();
 
-    private $keyIndex = 0;
-    private $dataIndex = 0;
+    private $dataIndex = 12;
 
     public static $version = '0.4';
     private $compressedData;
@@ -21,7 +21,7 @@ class DPGArcDecoder
      * @return $this
      */
     public function decode() {
-        $this->removeHeader()
+        $this->removeTextHeader()
             ->determineIndexes()
             ->extractEncodedData()
             ->deCryptData()
@@ -33,37 +33,32 @@ class DPGArcDecoder
      * @return $this
      */
     public function determineIndexes() {
-        foreach ($this->byteArray as $i => $byte) {
-            if ($this->key && ( $i > $this->keyIndex + 5 )) {
-                $found = TRUE;
-                foreach ($this->key as $ii => $comp) {
-                    if ($comp != $this->byteArray[$i + $ii]) {
-                        $found = FALSE;
-                        break;
-                    }
-                }
-                if ($found) {
-                    $this->dataIndex = $i + 4;
-                    break;
-                }
-            }
+        $header = array_slice($this->byteArray,0,27);
+        $this->key = array_slice($header,1,4);
 
-            if ( ! $this->key && $byte == 26) {
-                $this->key      = array_slice( $this->byteArray, $i + 1, 4 );
-                $this->keyIndex = $i;
-            }
-        }
-        if ($this->key && ! $this->dataIndex) {
-            foreach ($this->byteArray as $i => $byte) {
-                if ($i > $this->keyIndex + 5) {
-                    if ($byte == 13) {
-                        $this->dataIndex = $i + 5;
-                        break;
-                    }
-                }
-            }
+        $firstFolderOffset = array_slice($header,15,4);
+        $firstFolderOffset = unpack('V',pack('C*',...$firstFolderOffset));
 
+        $dataWithoutHeader = pack('C*', ...(array_slice($this->byteArray,23)));
+        $seek = $firstFolderOffset[1]+1;
+        $segments = array();
+        $test = unpack('V'.$seek,$dataWithoutHeader);
+        $length = $test[$seek];
+        $count = $test[$seek-1];
+        $dataWithoutHeader = substr($dataWithoutHeader,$seek*4);
+        $segments[] = substr($dataWithoutHeader,0,$length);
+        $dataWithoutHeader = substr($dataWithoutHeader,$length);
+        $seek = 1;
+
+        while (count($segments)<$count) {
+            $test = unpack('V'.$seek,$dataWithoutHeader);
+            $length = $test[$seek];
+            $dataWithoutHeader = substr($dataWithoutHeader,$seek*4);
+            $segments[] = substr($dataWithoutHeader,0,$length);
+            $dataWithoutHeader = substr($dataWithoutHeader,$length);
         }
+        $this->folders = $segments;
+        $this->byteArray = unpack('C*', $dataWithoutHeader);
         return $this;
     }
 
@@ -86,7 +81,7 @@ class DPGArcDecoder
     /**
      * @return $this
      */
-    public function removeHeader() {
+    public function removeTextHeader() {
         foreach ($this->byteArray as $i => $byte) {
             if ( ! $this->header && $byte == 13 && $this->byteArray[$i + 1] == 10) {
                 $this->header    = array_slice( $this->byteArray, 0, $i - 1 );
